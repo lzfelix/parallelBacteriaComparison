@@ -2,3 +2,4 @@
 cvtree.xcodeproj/*
 cvtree/results/*
 *.out
+*.a
