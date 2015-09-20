@@ -1,0 +1,4 @@
+*.trace/
+cvtree.xcodeproj/*
+cvtree/results/*
+*.out
