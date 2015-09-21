@@ -81,6 +81,10 @@ Bacteria::Bacteria(char *filename) {
             cont_buffer(ch);
     }
     
+    fclose (bacteria_file);
+}
+
+void Bacteria::stochastic() {
     // keeping some calculations stored
     long total_plus_complement = total + complement;
     double total_div_2 = total * 0.5;
@@ -153,6 +157,4 @@ Bacteria::Bacteria(char *filename) {
         }
     }
     delete t;
-    
-    fclose (bacteria_file);
 }

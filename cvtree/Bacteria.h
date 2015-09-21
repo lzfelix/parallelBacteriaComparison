@@ -56,6 +56,9 @@ public:
     long *ti;
     
     Bacteria(char *name);
+    
+    //previously this method was inside the constructor
+    void stochastic();
 };
 
 
