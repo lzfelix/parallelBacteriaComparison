@@ -28,8 +28,8 @@ const long Bacteria::M = M1 * AA_NUMBER;
 void Bacteria::InitVectors() {
     Bacteria:vector = new long [M];
     second = new long [M1];
-    memset(vector, 0, M * sizeof(long));
     memset(second, 0, M1 * sizeof(long));
+    memset(vector, 0, M * sizeof(long));
     memset(one_l, 0, AA_NUMBER * sizeof(long));
     total = 0;
     total_l = 0;

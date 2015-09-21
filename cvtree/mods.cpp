@@ -5,26 +5,29 @@
  20/09/2015
  */
 
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-#include <math.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 
 #include "Bacteria.h"
+#include <pthread.h>
+#include <sys/time.h>       // timming
 
-//#define min(a, b) ((a) < (b)) ? (a) : (b)
+#define MIN(a, b) ((a) < (b)) ? (a) : (b)
+
+#define NUM_THREADS 1
 
 namespace modifications {
     
-    //same things
-    int number_bacterias;
+    struct parameters {
+        int thread_id;
+        Bacteria **bacterias;
+    };
     
-    char** bacteria_name;
+    int number_bacterias;       //amount of bacterias to read
+    char** bacteria_name;       //array of bacteria names
 
     //hardcoded amount of bacteria
     #define BACTERIA_AMOUNT 41
-    
     double similarity_table[BACTERIA_AMOUNT][BACTERIA_AMOUNT];
     
     //path the the folder with the bacteria files
@@ -109,6 +112,69 @@ namespace modifications {
         return correlation / (sqrt(vector_len1) * sqrt(vector_len2));
     }
     
+    /* Displays the error message [msg] and exists with status code 1 */
+    void terminate_program(const char* msg) {
+        printf("%s\n", msg);
+        exit(1);
+    }
+    
+    
+    /* Threaded function spawned by [threaded_bacteria_comparison]. Populates the bacteria array */
+    void *create_bacterias(void *args) {
+        parameters *params = (parameters*)args;
+        
+        // calculating bounds and workload
+        int block_size = (number_bacterias) / NUM_THREADS;
+        int lower_bound = params->thread_id * block_size;
+        int upper_bound = 0;
+        
+        if (params->thread_id == NUM_THREADS - 1)
+            upper_bound = number_bacterias;
+        else
+            upper_bound = lower_bound + block_size;
+    
+
+        for (int i = lower_bound; i < upper_bound; i++) {
+            params->bacterias[i] = new Bacteria(bacteria_name[i]);
+        }
+
+        
+        printf("Thread %d done.\n", params->thread_id);
+        
+        return 0;
+    }
+    
+    /* Load the files retrieved from the list parallelly. */
+    void threaded_bacteria_comparison() {
+        
+        // creates the bacterias array
+        Bacteria **bacterias = new Bacteria*[number_bacterias];
+        
+        pthread_t workers[NUM_THREADS];
+        parameters params[NUM_THREADS];
+        
+        // enforces joinable threads
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+        
+        for (long i = 0; i < NUM_THREADS; i++) {
+            
+            // the thread parameters
+            params[i].thread_id = i;
+            params[i].bacterias = bacterias;
+            
+            int rc = pthread_create(&workers[i], &attr, create_bacterias, (void*)&params[i]);
+            
+            if (rc)
+                terminate_program("Error while creating threads.");
+        }
+        
+        // Joines the thread without caring for the returned value
+        for (long i = 0; i < NUM_THREADS; i++)
+            pthread_join(workers[i], NULL);
+    }
+    
     /* Slightly changed */
     void CompareAllBacteria()
     {
@@ -137,17 +203,25 @@ using namespace modifications;
 
 int main(int argc,char * argv[])
 {
-    time_t t1 = time(NULL);
+    struct timeval t_init, t_end;
+    double elapsed_time;
     
+    gettimeofday(&t_init, NULL);
+
     ReadInputFile(argv[1]);
+    threaded_bacteria_comparison();
+
+//    CompareAllBacteria();
     
-    CompareAllBacteria();
+    gettimeofday(&t_end, NULL);
     
-    time_t t2 = time(NULL);
+    //calculating time
+    elapsed_time = (t_end.tv_sec - t_init.tv_sec) * 1000.0;       //transforming to ms
+    elapsed_time += (t_end.tv_usec - t_init.tv_usec) / 1000.0;    //moving to the right place
     
-    printf("time elapsed: %ld seconds\n", t2 - t1);
+    printf("\nIn %f ms.\n", elapsed_time);
     
-    show_similarities();
+//    show_similarities();
     
     return 0;
 }
