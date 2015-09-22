@@ -12,7 +12,7 @@
 #include <pthread.h>
 #include <sys/time.h>       // timming
 
-#define NUM_THREADS 2
+#define NUM_THREADS 4
 
 //path the the folder with the bacteria files
 #define FOLDER_NAME "data/"
@@ -144,15 +144,20 @@ namespace modifications {
     
         //no bacterias were read so far
         params->bacterias_read = 0;
+        
+        int deltaSize = params->block_size * 0.25;
+        int max = params->upper_bound - params->lower_bound;
 
         for (int i = params->lower_bound; i < params->upper_bound; i++) {
-//            params->bacterias[i] = new Bacteria(bacteria_name[i]);
-//            params->bacterias[i]->stochastic();
+            params->bacterias[i] = new Bacteria(bacteria_name[i]);
+            params->bacterias[i]->stochastic();
             
             pthread_mutex_lock(&(params->mutex));
-            
             params->bacterias_read++;
-            pthread_cond_signal(&(params->signal));
+
+            if (params->bacterias_read > 0 && (params->bacterias_read % deltaSize == 0 || params->bacterias_read == max) ){
+                pthread_cond_signal(&(params->signal));
+            }
             
             pthread_mutex_unlock(&(params->mutex));
         }
@@ -163,21 +168,22 @@ namespace modifications {
 
     void *analyse_bacteria(void *args) {
         parameters *params = (parameters*)args;
-        
-//        printf("Hello from thread %d.\n", params->thread_id);
     
-        int relative_index = 0;
-        int absolute_index = params->lower_bound;
+        int block_index = params->lower_bound;
         int upper_bound = params->upper_bound;
         
         pthread_mutex_lock(&(params->mutex));
         
-        while (absolute_index < upper_bound) {
+        while (block_index < upper_bound) {
             // complying with pthreads spec.
-            while (relative_index >= params->bacterias_read)
+            while (params->bacterias[block_index] == NULL) {
                 pthread_cond_wait(&(params->signal), &(params->mutex));
+//                printf("Locked %d, %d\n", relative_index, params->bacterias_read);
+            }
             
-            printf("#%d Analyser analysing - %d -> %d [abs now is %d]\n", params->thread_id, relative_index, ++relative_index, ++absolute_index);
+//            printf("#%d Analyser analysing %d\n", params->thread_id, block_index);
+            params->bacterias[block_index]->stochastic();
+            block_index++;
         }
         
         pthread_mutex_unlock(&(params->mutex));
@@ -232,10 +238,10 @@ namespace modifications {
         for (long i = 0; i < NUM_THREADS; i++)
             pthread_join(analysers[i], NULL);
         
-//        perform comaparison
-//        for(int i=0; i<number_bacterias-1; i++)
-//            for(int j=i+1; j<number_bacterias; j++)
-//                similarity_table[i][j] = CompareBacteria(bacterias[i], bacterias[j]);
+////        perform comaparison
+        for(int i=0; i<number_bacterias-1; i++)
+            for(int j=i+1; j<number_bacterias; j++)
+                similarity_table[i][j] = CompareBacteria(bacterias[i], bacterias[j]);
     }
     
     void show_similarities() {
