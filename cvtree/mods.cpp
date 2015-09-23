@@ -12,7 +12,7 @@
 #include <pthread.h>
 #include <sys/time.h>       // timming
 
-#define NUM_THREADS 4
+#define NUM_THREADS 5
 
 //path the the folder with the bacteria files
 #define FOLDER_NAME "data/"
@@ -23,21 +23,62 @@ namespace modifications {
         int thread_id;
         int bacterias_read;                // the amount of already bacteria files read
         Bacteria **bacterias;             // pointer to the array of bacterias
-        pthread_mutex_t mutex;      // the mutex to protect [bacterias_read]
-        pthread_cond_t  signal;        // used to wake the thread that runs ::stochastic() over each bacteria on the thread block
         
-        // bounding variables
         int lower_bound;
         int upper_bound;
-        int block_size;
     };
-    
+
     int number_bacterias;       //amount of bacterias to read
     char** bacteria_name;       //array of bacteria names
+    
+    //these tables are used to distribute the comparison workload
+    //(which is a upper triangular matrix with main diagonal = 0)
+    //evenly among threads
+    int *triangle_table;
+    int *triangle_bounds;
 
     //hardcoded amount of bacteria
     #define BACTERIA_AMOUNT 41
     double similarity_table[BACTERIA_AMOUNT][BACTERIA_AMOUNT];
+    
+    /* Computes the first and last value of each line on the triangular matrix */
+    void create_triangle_table() {
+        triangle_table = new int[number_bacterias - 1];
+        triangle_bounds = new int[number_bacterias];
+        
+        int seed = number_bacterias - 2;
+        int seed_sum = seed;
+        int lower_bound = 0;
+        
+        for (int i = 0; i < number_bacterias - 1; i++) {
+            triangle_table[i] = seed;
+            triangle_bounds[i] = lower_bound;
+            
+            lower_bound = seed + 1;
+            seed += seed_sum--;
+        }
+        
+        triangle_bounds[number_bacterias - 1] = 10000;
+    }
+    
+    /* finds the next element to search on the comparison table */
+    inline int pseudo_binary_search(int key, int a, int b) {
+        int middle = (a + b) / 2;
+        
+        if (key > triangle_table[number_bacterias - 2] || key < 0)
+            return -1;
+        
+        if (key <= triangle_table[middle]) {
+            if (middle - 1 < 0) return 0;
+            
+            if (key > triangle_table[middle - 1])
+                return middle;
+            else
+                return pseudo_binary_search(key, a, middle);
+        }
+        else
+            return pseudo_binary_search(key, middle, b);
+    }
     
     /* Same thing */
     void ReadInputFile(char* input_name)
@@ -99,8 +140,6 @@ namespace modifications {
             }
         }
         
-        //These two loops can be paralellised
-        
         while (p1 < b1->count)
         {
             double t1 = b1->tv[p1++];
@@ -113,8 +152,6 @@ namespace modifications {
             vector_len2 += (t2 * t2);
         }
         
-        //face here, duh
-        
         return correlation / (sqrt(vector_len1) * sqrt(vector_len2));
     }
     
@@ -124,82 +161,51 @@ namespace modifications {
         exit(1);
     }
     
-    /* For each block, finds the lower, upper bounds and block size. Call this just after having parsed the list file */
-    /* inline */ void calculate_block_parameters(parameters *p) {
-        int id = p->thread_id;
-        
-        p->block_size = (number_bacterias) / NUM_THREADS;
-        p->lower_bound = p->thread_id * p->block_size;
-        
-        if (p->thread_id == NUM_THREADS - 1)
-            p->upper_bound = number_bacterias;
-        else
-            p->upper_bound = p->lower_bound + p->block_size;
-        
-    }
-    
     /* Threaded function spawned by [threaded_bacteria_comparison]. Populates the bacteria array */
     void *create_bacterias(void *args) {
         parameters *params = (parameters*)args;
-    
-        //no bacterias were read so far
-        params->bacterias_read = 0;
         
-        int deltaSize = params->block_size * 0.25;
-        int max = params->upper_bound - params->lower_bound;
-
         for (int i = params->lower_bound; i < params->upper_bound; i++) {
             params->bacterias[i] = new Bacteria(bacteria_name[i]);
             params->bacterias[i]->stochastic();
-            
-            pthread_mutex_lock(&(params->mutex));
-            params->bacterias_read++;
-
-            if (params->bacterias_read > 0 && (params->bacterias_read % deltaSize == 0 || params->bacterias_read == max) ){
-                pthread_cond_signal(&(params->signal));
-            }
-            
-            pthread_mutex_unlock(&(params->mutex));
         }
         
         return 0;
     }
     
-
-    void *analyse_bacteria(void *args) {
+    /* Compare a single bacteria with all others evenly */
+    void *threaded_compare_bacterias(void *args) {
         parameters *params = (parameters*)args;
+        
+        int r_x = 0;
+        int r_y = 0;
+        int last_y = 0;
+        int max_x = -1;
+     
+         for (int i = params->lower_bound; i < params->upper_bound; i++) {
+             if ( i > max_x) {
+                 r_y = pseudo_binary_search(i, 0, number_bacterias - 1);
+                 last_y = r_y;
+                 max_x = triangle_bounds[r_y + 1] - 1;
+             }
+             else
+                 r_y = last_y;
+             
+             r_x = r_y + 1 + i - triangle_bounds[r_y];
+         
+             similarity_table[r_y][r_x] = CompareBacteria(params->bacterias[r_y], params->bacterias[r_x]);
+         }
     
-        int block_index = params->lower_bound;
-        int upper_bound = params->upper_bound;
-        
-        pthread_mutex_lock(&(params->mutex));
-        
-        while (block_index < upper_bound) {
-            // complying with pthreads spec.
-            while (params->bacterias[block_index] == NULL) {
-                pthread_cond_wait(&(params->signal), &(params->mutex));
-//                printf("Locked %d, %d\n", relative_index, params->bacterias_read);
-            }
-            
-//            printf("#%d Analyser analysing %d\n", params->thread_id, block_index);
-            params->bacterias[block_index]->stochastic();
-            block_index++;
-        }
-        
-        pthread_mutex_unlock(&(params->mutex));
-        
-        
         return 0;
     }
     
     /* Load the files retrieved from the list parallelly. */
-    void threaded_bacteria_comparison() {
+    void threaded_bacteria_creation() {
         
         // creates the bacterias array
         Bacteria **bacterias = new Bacteria*[number_bacterias];
         
         pthread_t workers[NUM_THREADS];
-        pthread_t analysers[NUM_THREADS];
         parameters params[NUM_THREADS];
         
         // enforces joinable threads
@@ -207,41 +213,55 @@ namespace modifications {
         pthread_attr_init(&attr);
         pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
         
-        // spawning thread responsible for creating bacterias
-        for (long i = 0; i < NUM_THREADS; i++) {
+        int block_size = number_bacterias / NUM_THREADS;
+        
+        // spawns threads responsible for creating bacterias
+        for (int i = 0; i < NUM_THREADS; i++) {
+            
             // the thread parameters
             params[i].thread_id = i;
             params[i].bacterias = bacterias;
             
-            // these parameters are only used analyse_bacteria()
-            pthread_mutex_init(&params[i].mutex, NULL);
-            pthread_cond_init(&params[i].signal, NULL);
+            // setting the bounds
+            params[i].lower_bound = i * block_size;
             
-            calculate_block_parameters(&params[i]);
+            if (params[i].thread_id == NUM_THREADS - 1)
+                params[i].upper_bound = number_bacterias;
+            else
+                params[i].upper_bound = params[i].lower_bound + block_size;
             
+            // creating the thread
             int rc = pthread_create(&workers[i], &attr, create_bacterias, (void*)&params[i]);
             
             if (rc)
                 terminate_program("Error while creating threads.");
         }
         
-        // spawns thread that analyse each bacteria
-        for (int i = 0; i < NUM_THREADS; i++) {
-            pthread_create(&analysers[i], &attr, analyse_bacteria, (void*)&params[i]);
-        }
-        
         // joins the worker threads without caring for the returned value
         for (long i = 0; i < NUM_THREADS; i++)
             pthread_join(workers[i], NULL);
         
-        // joins the analysers
-        for (long i = 0; i < NUM_THREADS; i++)
-            pthread_join(analysers[i], NULL);
+        // create threads to perform the comparison
+        int max_comparisons = number_bacterias * 0.5 * (number_bacterias - 1);
+        block_size = max_comparisons / NUM_THREADS;
         
-////        perform comaparison
-        for(int i=0; i<number_bacterias-1; i++)
-            for(int j=i+1; j<number_bacterias; j++)
-                similarity_table[i][j] = CompareBacteria(bacterias[i], bacterias[j]);
+        for (int i = 0; i < NUM_THREADS; i++) {
+            params[i].lower_bound = block_size * i;
+            
+            if (params[i].thread_id == NUM_THREADS - 1)
+                params[i].upper_bound = max_comparisons;
+            else
+                params[i].upper_bound = params[i].lower_bound + block_size;
+            
+            int rc = pthread_create(&workers[i], &attr, threaded_compare_bacterias, (void*)&params[i]);
+            
+            if (rc)
+                terminate_program("Error while creating comparison threads.\n");
+        }
+        
+        // join the comparison threads
+        for (long i = 0; i < NUM_THREADS; i++)
+            pthread_join(workers[i], NULL);
     }
     
     void show_similarities() {
@@ -261,7 +281,9 @@ int main(int argc,char * argv[])
     gettimeofday(&t_init, NULL);
 
     ReadInputFile(argv[1]);
-    threaded_bacteria_comparison();
+    
+    create_triangle_table();
+    threaded_bacteria_creation();
     
     gettimeofday(&t_end, NULL);
     
@@ -269,9 +291,9 @@ int main(int argc,char * argv[])
     elapsed_time = (t_end.tv_sec - t_init.tv_sec) * 1000.0;       //transforming to ms
     elapsed_time += (t_end.tv_usec - t_init.tv_usec) / 1000.0;    //moving to the right place
     
-    printf("\nIn %f ms.\n", elapsed_time);
+    printf("In %f ms.\n", elapsed_time);
     
-//    show_similarities();
+    show_similarities();
     
     return 0;
 }
