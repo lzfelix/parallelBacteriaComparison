@@ -12,9 +12,12 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
+
+#include <pthread.h>
 
 #define encode(ch)		code[ch-'A']
-#define LEN				6
+#define LEN                  6
 #define AA_NUMBER		20
 #define	EPSILON			1e-010
 
@@ -43,22 +46,39 @@ private:
     
     static const short code[27];
 
-    static const long M, M1, M2;
-
     void InitVectors();
     void init_buffer(char* buffer);
     void cont_buffer(char ch);
     
+    // thread function
+//    void* threaded_data(void *args);
+    
 public:
+    struct thread_parameters {
+        int thread_id;
+        int pool_size;
+        long block_size;
+        double half_total;
+        
+        //pointers to arrays
+        double *one_l_div_total;
+        double *second_div_total;
+        double *t;
+        long *vector;
+    };
+    
+        static const long M, M1, M2;
+    
     /* Fields used on the stochastic method */
     long count;
     double* tv;
     long *ti;
     
+    friend void *threaded_data(void *args);
     Bacteria(char *name);
     
     //previously this method was inside the constructor
-    void stochastic();
+    void stochastic(pthread_t thread_pool[], int size);
 };
 
 

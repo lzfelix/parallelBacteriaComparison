@@ -13,6 +13,7 @@
 #include <sys/time.h>       // timming
 
 #define NUM_THREADS 5
+#define STOCHASTIC_THREADS 4
 
 //path the the folder with the bacteria files
 #define FOLDER_NAME "data/"
@@ -37,7 +38,7 @@ namespace modifications {
     int *triangle_table;
     int *triangle_bounds;
 
-    //hardcoded amount of bacteria
+    //hardcoded amount of bacteria for performance tests
     #define BACTERIA_AMOUNT 41
     double similarity_table[BACTERIA_AMOUNT][BACTERIA_AMOUNT];
     
@@ -61,7 +62,7 @@ namespace modifications {
         triangle_bounds[number_bacterias - 1] = 10000;
     }
     
-    /* finds the next element to search on the comparison table */
+    /* finds the next element to search on the triangle-table */
     inline int pseudo_binary_search(int key, int a, int b) {
         int middle = (a + b) / 2;
         
@@ -80,7 +81,7 @@ namespace modifications {
             return pseudo_binary_search(key, middle, b);
     }
     
-    /* Same thing */
+    /* Builds the path to each bacteria file based on the initial list file */
     void ReadInputFile(char* input_name)
     {
         FILE* input_file = fopen(input_name,"r");
@@ -105,7 +106,7 @@ namespace modifications {
         fclose(input_file);
     }
     
-    /* Different */
+    /* Name says everything. */
     double CompareBacteria(Bacteria* b1, Bacteria* b2)
     {
         double correlation = 0;
@@ -161,19 +162,21 @@ namespace modifications {
         exit(1);
     }
     
-    /* Threaded function spawned by [threaded_bacteria_comparison]. Populates the bacteria array */
+    /* Threaded function spawned by [threaded_bacteria_creation]. Populates the bacteria array */
     void *create_bacterias(void *args) {
+        pthread_t pool[STOCHASTIC_THREADS];
+        
         parameters *params = (parameters*)args;
         
         for (int i = params->lower_bound; i < params->upper_bound; i++) {
             params->bacterias[i] = new Bacteria(bacteria_name[i]);
-            params->bacterias[i]->stochastic();
+            params->bacterias[i]->stochastic(pool, STOCHASTIC_THREADS);
         }
         
         return 0;
     }
     
-    /* Compare a single bacteria with all others evenly */
+    /* Compare a single bacteria with all others evenly using triangle tables */
     void *threaded_compare_bacterias(void *args) {
         parameters *params = (parameters*)args;
         
@@ -264,6 +267,7 @@ namespace modifications {
             pthread_join(workers[i], NULL);
     }
     
+    /* Displays the similarity table */
     void show_similarities() {
         for (int i = 0; i < BACTERIA_AMOUNT; i++)
             for (int j = i + 1; j < BACTERIA_AMOUNT ; j++)
