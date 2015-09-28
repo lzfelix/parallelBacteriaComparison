@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <math.h>
 #include <stdlib.h>
+
+#include <sys/time.h>       // timming
 
 namespace improved {
     //same things
@@ -307,17 +308,22 @@ namespace improved {
 //
 //int main(int argc,char * argv[])
 //{
-//    system("pwd");
-//	time_t t1 = time(NULL);
+//    struct timeval t_init, t_end;
+//    double elapsed_time;
+//    
+//    gettimeofday(&t_init, NULL);
 //
 //	Init();
-//
 //	ReadInputFile(argv[1]);
-//    printf("xablau");
 //	CompareAllBacteria();
+//    
+//    gettimeofday(&t_end, NULL);
 //
-//	time_t t2 = time(NULL);
-//	printf("time elapsed: %ld seconds\n", t2 - t1);
+//    //calculating time
+//    elapsed_time = (t_end.tv_sec - t_init.tv_sec) * 1000.0;       //transforming to ms
+//    elapsed_time += (t_end.tv_usec - t_init.tv_usec) / 1000.0;    //moving to the right place
+//    
+//    printf("In %f ms.\n", elapsed_time);
 //    
 //    return 0;
-//}
+}
