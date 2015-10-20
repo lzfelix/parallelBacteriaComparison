@@ -304,26 +304,26 @@ namespace improved {
     }
 }
 
-//using namespace improved;
-//
-//int main(int argc,char * argv[])
-//{
-//    struct timeval t_init, t_end;
-//    double elapsed_time;
-//    
-//    gettimeofday(&t_init, NULL);
-//
-//	Init();
-//	ReadInputFile(argv[1]);
-//	CompareAllBacteria();
-//    
-//    gettimeofday(&t_end, NULL);
-//
-//    //calculating time
-//    elapsed_time = (t_end.tv_sec - t_init.tv_sec) * 1000.0;       //transforming to ms
-//    elapsed_time += (t_end.tv_usec - t_init.tv_usec) / 1000.0;    //moving to the right place
-//    
-//    printf("In %f ms.\n", elapsed_time);
-//    
-//    return 0;
+using namespace improved;
+
+int main(int argc,char * argv[])
+{
+    struct timeval t_init, t_end;
+    double elapsed_time;
+    
+    gettimeofday(&t_init, NULL);
+
+	Init();
+	ReadInputFile(argv[1]);
+	CompareAllBacteria();
+    
+    gettimeofday(&t_end, NULL);
+
+    //calculating time
+    elapsed_time = (t_end.tv_sec - t_init.tv_sec) * 1000.0;       //transforming to ms
+    elapsed_time += (t_end.tv_usec - t_init.tv_usec) / 1000.0;    //moving to the right place
+    
+    printf("In %f ms.\n", elapsed_time);
+    
+    return 0;
 }

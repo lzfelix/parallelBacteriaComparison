@@ -298,23 +298,23 @@ namespace tidy {
     }
 }
 
-//using namespace tidy;
-//
-//int main(int argc,char * argv[])
-//{
-//    time_t t1 = time(NULL);
-//    
-//    //Init constants M1, M2 and M
-//    Init();
-//    
-//    //read the bacteria files.
-//    ReadInputFile(argv[1]);
-//    
-//    //Compares bacterias
-//    CompareAllBacteria();
-//    
-//    time_t t2 = time(NULL);
-//    printf("time elapsed: %ld seconds\n", t2 - t1);
-//    
-//    return 0;
-//}
+using namespace tidy;
+
+int main(int argc,char * argv[])
+{
+    time_t t1 = time(NULL);
+    
+    //Init constants M1, M2 and M
+    Init();
+    
+    //read the bacteria files.
+    ReadInputFile(argv[1]);
+    
+    //Compares bacterias
+    CompareAllBacteria();
+    
+    time_t t2 = time(NULL);
+    printf("time elapsed: %ld seconds\n", t2 - t1);
+    
+    return 0;
+}
